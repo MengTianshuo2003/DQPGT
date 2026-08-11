@@ -1,0 +1,161 @@
+# general settings
+name: Enhancement_DQPGT_LOL_v2_synthetic
+model_type: ImageCleanModel
+ablation_protocol: true
+ablation_variant: FULL
+ablation_variants_file: ablation_variants.yml
+scale: 1
+num_gpu: 1  # set num_gpu: 0 for cpu mode
+manual_seed: 100
+deterministic: true
+# This PyTorch/CUDA build has no deterministic backward for adaptive_avg_pool2d.
+# Keep deterministic seeds/cuDNN settings, but warn instead of aborting.
+deterministic_warn_only: true
+
+# dataset and data loader settings
+datasets:
+  train:
+    name: TrainSet
+    type: Dataset_PairedImage
+    dataroot_gt: /root/LOLv2/Synthetic/Train/Normal
+    dataroot_lq: /root/LOLv2/Synthetic/Train/Low
+    geometric_augs: true
+
+    filename_tmpl: '{}'
+    io_backend:
+      type: disk
+
+    # data loader
+    use_shuffle: true
+    num_worker_per_gpu: 8
+    batch_size_per_gpu: 8
+
+    ### -------------Progressive training--------------------------
+    # mini_batch_sizes: [8,5,4,2,1,1]             # Batch size per gpu   
+    # iters: [46000,32000,24000,18000,18000,12000]
+    # gt_size: 384   # Max patch size for progressive training
+    # gt_sizes: [128,160,192,256,320,384]  # Patch sizes for progressive training.
+    # ### ------------------------------------------------------------
+
+    ### ------- Training on single fixed-patch size 128x128---------
+    mini_batch_sizes: [8]   
+    iters: [150000]
+    gt_size: 128   
+    gt_sizes: [128]
+    ### ------------------------------------------------------------
+
+    dataset_enlarge_ratio: 1
+    prefetch_mode: ~
+
+  val:
+    # Follow the requested LOLv2-syn protocol: validate on the official Test set.
+    name: LOLv2SyntheticTest
+    type: Dataset_PairedImage
+    dataroot_gt: /root/LOLv2/Synthetic/Test/Normal
+    dataroot_lq: /root/LOLv2/Synthetic/Test/Low
+    io_backend:
+      type: disk
+
+# network structures
+network_g:
+  type: QuadPriorFormer
+  in_channels: 3
+  out_channels: 3
+  n_feat: 40
+  stage: 1
+  num_blocks: [1,2,2]
+  # A variants: no_prior | retinex | equal_prior | null(full) |
+  #             no_H | no_S | no_O | no_W
+  ablation: ~
+  use_attn_norm: true
+  # B0: neither; B_SE: SE-only; B1/B2/B3: FCAN-only top1/top4/top16; B_K8: top8
+  use_se: false
+  use_fcan: true
+  fcan_freq_sel_method: top4
+# path
+path:
+  pretrain_network_g: ~
+  strict_load_g: true
+  resume_state: ~
+
+# training settings
+train:
+  total_iter: 150000
+  warmup_iter: -1 # no warm up
+  use_grad_clip: true
+
+  # Fixed 150k schedule for every ablation variant.
+  scheduler:
+    type: CosineAnnealingRestartCyclicLR
+    periods: [46000, 104000]       
+    restart_weights: [1,1]
+    eta_mins: [0.0002,0.000001]   
+  
+  mixing_augs:
+    mixup: true
+    mixup_beta: 1.2
+    use_identity: true
+
+  optim_g:
+    type: Adam
+    lr: !!float 2e-4
+    # weight_decay: !!float 1e-4
+    betas: [0.9, 0.999]
+  
+  # losses
+  pixel_opt:
+    type: L1PerceptualSSIMLoss
+    l1_weight: 1.0
+    ssim_weight: 0.3
+    perc_weight: 0.1
+    # E1 (relu3_3) is the unified baseline for subsequent ablations.
+    layer: relu3_3
+    reduction: mean
+
+  diagnostics:
+    enabled: true
+    log_freq: 1000
+    log_first_iter: true
+    track_prior: true
+    track_fcan: true
+    track_layernorm: true
+    track_grad_norms: true
+    output: diagnostics.jsonl
+
+# validation settings
+val:
+  window_size: 4
+  val_freq: !!float 1e3
+  save_img: false
+  rgb2bgr: false
+  use_image: false
+  gt_mean: false
+  max_minibatch: 8
+  loss_probe_gradients: true
+
+  metrics:
+    psnr: # metric name, can be arbitrary
+      type: calculate_psnr
+      crop_border: 0
+      test_y_channel: false
+    ssim:
+      type: calculate_ssim
+      crop_border: 0
+      test_y_channel: false
+    delta_e00:
+      type: calculate_delta_e00
+      crop_border: 0
+
+# logging settings
+logger:
+  print_freq: 500
+  save_checkpoint_freq: !!float 1e3
+  use_tb_logger: true
+  wandb:
+    project: low_light
+    resume_id: ~
+
+# dist training settings
+dist_params:
+  backend: nccl
+  port: 29500

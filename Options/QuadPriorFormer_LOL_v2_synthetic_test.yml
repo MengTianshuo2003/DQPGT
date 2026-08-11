@@ -1,0 +1,68 @@
+# Evaluation and output-saving entry for the official LOLv2 Synthetic Test set.
+# The training YAML already uses this same set as validation and selects the
+# best-validation-PSNR checkpoint on it; this is not an independent hold-out test.
+name: Enhancement_DQPGT_LOL_v2_synthetic_test
+model_type: ImageCleanModel
+ablation_variant: FULL
+ablation_variants_file: ablation_variants.yml
+scale: 1
+num_gpu: 1
+manual_seed: 100
+deterministic: true
+deterministic_warn_only: true
+
+datasets:
+  test:
+    name: LOLv2SyntheticTest
+    type: Dataset_PairedImage
+    dataroot_gt: /root/LOLv2/Synthetic/Test/Normal
+    dataroot_lq: /root/LOLv2/Synthetic/Test/Low
+    filename_tmpl: '{}'
+    io_backend:
+      type: disk
+
+network_g:
+  type: QuadPriorFormer
+  in_channels: 3
+  out_channels: 3
+  n_feat: 40
+  stage: 1
+  num_blocks: [1, 2, 2]
+  ablation: ~
+  use_attn_norm: true
+  use_se: false
+  use_fcan: true
+  fcan_freq_sel_method: top4
+
+path:
+  pretrain_network_g: ~  # set to the best validation-PSNR checkpoint
+  strict_load_g: true
+  resume_state: ~
+
+val:
+  window_size: 4
+  save_img: true
+  rgb2bgr: false
+  use_image: false
+  gt_mean: false
+  max_minibatch: 8
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 0
+      test_y_channel: false
+    ssim:
+      type: calculate_ssim
+      crop_border: 0
+      test_y_channel: false
+    delta_e00:
+      type: calculate_delta_e00
+      crop_border: 0
+    # Enable for E/F after installing lpips; implementation fixes net='alex'.
+    # lpips:
+    #   type: calculate_lpips
+    #   crop_border: 0
+
+dist_params:
+  backend: nccl
+  port: 29500

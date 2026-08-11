@@ -1,0 +1,193 @@
+# Unified DQPGT ablation registry.
+# Every formal variant inherits FULL and changes only the named variable.
+
+
+
+version: 3
+
+variants:
+  FULL:
+    description: Canonical full model using FCAN top4 and the E1 relu3_3 loss baseline; shared by A3, B2, E1 and F1.
+    overrides:
+      val:
+        gt_mean: false
+      network_g:
+        ablation: ~
+        use_attn_norm: true
+        use_se: false
+        use_fcan: true
+        fcan_freq_sel_method: top4
+      train:
+        pixel_opt:
+          l1_weight: 1.0
+          ssim_weight: 0.3
+          perc_weight: 0.1
+          layer: relu3_3
+
+  A0:
+    extends: FULL
+    description: No prior; every QP-MSA bypasses guidance modulation of V.
+    overrides:
+      network_g:
+        ablation: no_prior
+
+  A1:
+    extends: FULL
+    description: Retinexformer-style F_lu illumination guidance.
+    overrides:
+      network_g:
+        ablation: retinex
+
+  A2:
+    extends: FULL
+    description: Four projected priors with fixed equal weights 1/4.
+    overrides:
+      network_g:
+        ablation: equal_prior
+
+  A3:
+    extends: FULL
+    description: Full four-prior model with dynamic per-pixel softmax fusion.
+
+  A4:
+    extends: FULL
+    description: Full minus H; remaining S/O/W weights are re-normalized.
+    overrides:
+      network_g:
+        ablation: no_H
+
+  A5:
+    extends: FULL
+    description: Full minus S; remaining H/O/W weights are re-normalized.
+    overrides:
+      network_g:
+        ablation: no_S
+
+  A6:
+    extends: FULL
+    description: Full minus O (RGB-order); remaining H/S/W weights are re-normalized.
+    overrides:
+      network_g:
+        ablation: no_O
+
+  A7:
+    extends: FULL
+    description: Full minus W; remaining H/S/O weights are re-normalized.
+    overrides:
+      network_g:
+        ablation: no_W
+
+  B0:
+    extends: FULL
+    description: Feed-forward baseline without SE or FCAN.
+    overrides:
+      network_g:
+        use_fcan: false
+
+  B_SE:
+    extends: FULL
+    description: SE-only replacement control; FCAN is disabled.
+    overrides:
+      network_g:
+        use_se: true
+        use_fcan: false
+
+  B1:
+    extends: FULL
+    description: FCAN using the first one DCT coordinate, with SE disabled.
+    overrides:
+      network_g:
+        fcan_freq_sel_method: top1
+
+  B2:
+    extends: FULL
+    description: FCAN using the first four DCT coordinates with SE disabled; alias of canonical Full.
+
+  B3:
+    extends: FULL
+    description: FCAN using 16 DCT coordinates with SE disabled; retained as the former Full comparison.
+    overrides:
+      network_g:
+        fcan_freq_sel_method: top16
+
+  C_FULL:
+    extends: A3
+    description: C evidence row reusing A3 Full.
+
+  C_NO_W:
+    extends: A7
+    description: C evidence row reusing A7 Full-minus-W.
+
+  D1:
+    extends: A3
+    description: GCM and sigma diagnostics reusing canonical Full training.
+
+  E0:
+    extends: FULL
+    description: Loss without perceptual term.
+    overrides:
+      train:
+        pixel_opt:
+          perc_weight: 0.0
+
+  E1:
+    extends: FULL
+    description: VGG16 relu3_3 perceptual feature with weight 0.1; alias of the canonical Full loss baseline.
+    overrides:
+      train:
+        pixel_opt:
+          perc_weight: 0.1
+          layer: relu3_3
+
+  E2:
+    extends: FULL
+    description: VGG16 relu4_3 perceptual feature with weight 0.1.
+    overrides:
+      train:
+        pixel_opt:
+          perc_weight: 0.1
+          layer: relu4_3
+
+  F_S0:
+    extends: FULL
+    description: Loss without the SSIM term.
+    overrides:
+      train:
+        pixel_opt:
+          ssim_weight: 0.0
+
+  F0:
+    extends: FULL
+    description: SSIM weight sensitivity at 0.1.
+    overrides:
+      train:
+        pixel_opt:
+          ssim_weight: 0.1
+
+  F1:
+    extends: FULL
+    description: Reference loss weights (1.0, 0.3, 0.1); alias of canonical Full.
+
+  F2:
+    extends: FULL
+    description: SSIM weight sensitivity at 0.5.
+    overrides:
+      train:
+        pixel_opt:
+          ssim_weight: 0.5
+
+  F3:
+    extends: FULL
+    description: Perceptual weight sensitivity at 0.005.
+    overrides:
+      train:
+        pixel_opt:
+          perc_weight: 0.005
+
+  F4:
+    extends: FULL
+    description: Perceptual weight sensitivity at 0.02.
+    overrides:
+      train:
+        pixel_opt:
+          perc_weight: 0.02
