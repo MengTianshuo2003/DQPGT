@@ -44,7 +44,7 @@ python setup.py develop --no_cuda_ext
 
 
 ### 3. Prepare Dataset
-If `data` is empty，please download the dataset from [Baidu Netdisk](https://pan.baidu.com/s/1_0oAd-92GzPy9TB4cr9h-g?pwd=ntbp) or [Google Drive](https://drive.google.com/drive/folders/1v5v03sDxqWjybB-PwPFuYWE1RFV36G3_?usp=sharing) and place the data file in the DQPGT folder.
+If `data` is empty，please download the dataset from [Baidu Netdisk](https://pan.baidu.com/s/1_0oAd-92GzPy9TB4cr9h-g?pwd=ntbp) or [Google Drive](https://drive.google.com/drive/project/1LoKjzu5oskkrWrnj5mts37YLB06dK2__?usp=sharing) and place the data file in the DQPGT folder.
 
 **Note:** 
 Please download the `text_list.txt` and then put it into the folder `data/SMID/SMID_Long_np/`
