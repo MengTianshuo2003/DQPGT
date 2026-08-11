@@ -256,12 +256,12 @@ All ablation studies in this paper were conducted on the LOLv2-synthetic dataset
 python basicsr/train.py --opt Options/QuadPriorFormer_LOL_v2_synthetic.yml \
   --list-variants
 
-# train A0
+#### train A0
 python basicsr/train.py \
   --opt Options/QuadPriorFormer_LOL_v2_synthetic.yml \
   --variant A0
 
-# test A0 
+#### test A0 
 python basicsr/test.py \
   --opt Options/QuadPriorFormer_LOL_v2_synthetic_test.yml \
   --variant A0 \
