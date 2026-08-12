@@ -109,18 +109,21 @@ class TrainingDiagnostics:
             if not self.active:
                 return
             saved = getattr(module, 'saved_features', {})
-            gcm = module.gcm.detach().float().cpu()
-            denom = torch.norm(initial_gcm).clamp_min(1e-12)
-            entry = {
-                'gcm': gcm.tolist(),
-                'gcm_relative_drift': (
-                    torch.norm(gcm - initial_gcm) / denom).item()
-            }
-            if 'scale' in saved:
+            entry = {}
+            gcm = getattr(module, 'gcm', None)
+            if gcm is not None:
+                gcm = gcm.detach().float().cpu()
+                denom = torch.norm(initial_gcm).clamp_min(1e-12)
+                entry.update({
+                    'gcm': gcm.tolist(),
+                    'gcm_relative_drift': (
+                        torch.norm(gcm - initial_gcm) / denom).item()
+                })
+            if saved.get('scale') is not None:
                 entry['scale'] = self._stats(saved['scale'])
-            if 'sigma' in saved:
+            if saved.get('sigma') is not None:
                 entry['sigma'] = self._stats(saved['sigma'])
-            if 'weights' in saved:
+            if saved.get('weights') is not None:
                 entry['prior_weights'] = self._stats(saved['weights'])
             self.record['prior'][name] = entry
         return hook
@@ -271,18 +274,21 @@ class TrainingDiagnostics:
             if module.__class__.__name__ != 'PriorConv2d':
                 continue
             saved = getattr(module, 'saved_features', {})
-            gcm = module.gcm.detach().float().cpu()
-            denom = torch.norm(initial_gcm).clamp_min(1e-12)
-            entry = {
-                'gcm': gcm.tolist(),
-                'gcm_relative_drift': (
-                    torch.norm(gcm - initial_gcm) / denom).item()
-            }
-            if 'scale' in saved:
+            entry = {}
+            gcm = getattr(module, 'gcm', None)
+            if gcm is not None:
+                gcm = gcm.detach().float().cpu()
+                denom = torch.norm(initial_gcm).clamp_min(1e-12)
+                entry.update({
+                    'gcm': gcm.tolist(),
+                    'gcm_relative_drift': (
+                        torch.norm(gcm - initial_gcm) / denom).item()
+                })
+            if saved.get('scale') is not None:
                 entry['scale'] = self._stats(saved['scale'])
-            if 'sigma' in saved:
+            if saved.get('sigma') is not None:
                 entry['sigma'] = self._stats(saved['sigma'])
-            if 'weights' in saved:
+            if saved.get('weights') is not None:
                 entry['prior_weights'] = self._stats(saved['weights'])
             record['prior'][name] = entry
         self._write(record)
