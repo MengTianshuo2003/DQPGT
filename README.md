@@ -255,20 +255,28 @@ python3 basicsr/train.py --opt Options/QuadPriorFormer_SMID.yml
 ### 6.Ablation
 All ablation studies in this paper were conducted on the LOLv2-synthetic dataset.
 
+```
+# list all variants
 python basicsr/train.py --opt Options/QuadPriorFormer_LOL_v2_synthetic.yml \
   --list-variants
+```
 
 #### train A0
+
+```
 python basicsr/train.py \
   --opt Options/QuadPriorFormer_LOL_v2_synthetic.yml \
   --variant A0
+```
 
 #### test A0 
+
+```
 python basicsr/test.py \
   --opt Options/QuadPriorFormer_LOL_v2_synthetic_test.yml \
   --variant A0 \
   --weights /path/to/A0/best_psnr_xx.xx_iter.pth
-
+```
 
 
 ### 6.Acknowledgments
