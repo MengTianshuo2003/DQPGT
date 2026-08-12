@@ -98,92 +98,15 @@ def hat_Wllw2(E, Ex, Ey, El, Elx, Ely, Ell, Ellx, Elly):
 
 # == Color invariant convolution ==
 
-#修改ablation
+
 class PriorConv2d(nn.Module):
     def __init__(self, n_fea_middle, k=3, scale=0.0, ablation=None):
 
         super(PriorConv2d, self).__init__()
         self.use_cuda = torch.cuda.is_available()
         self.n_fea_middle = n_fea_middle
-
-        # Constants
-        self.gcm = torch.nn.Parameter(torch.tensor([[0.06, 0.63, 0.27], [0.3, 0.04, -0.35], [0.34, -0.6, 0.17]]))
-        self.k = k
-
-        # 基础通道数
-        base_channels = n_fea_middle // 4
-        self.conv_H = nn.Conv2d(1, base_channels, kernel_size=1, bias=True)
-        self.conv_S = nn.Conv2d(1, base_channels, kernel_size=1, bias=True)
-        self.conv_RGB = nn.Conv2d(3, base_channels, kernel_size=1, bias=True)
-        self.conv_Ww = nn.Conv2d(1, base_channels, kernel_size=1, bias=True)
-
-        # 调整层
-        self.conv_adjust = nn.Conv2d(base_channels * 4, n_fea_middle, kernel_size=1, bias=True)
-
-        self.conv = torch.nn.Sequential(
-            torch.nn.Conv2d(3, 16, 3, padding=1),
-            nn.SiLU(),
-            torch.nn.Conv2d(16, 16, 3, padding=1),
-            nn.SiLU(),
-            torch.nn.Conv2d(16, 1, 3, padding=1)
-        )
-        
-        #权重预测分支.引入一个动态权重生成模块，根据输入图像的特征预测每个先验的权重，使权重随着图像内容变化
-        self.weight_predictor = nn.Sequential(
-            nn.Conv2d(3, 16, kernel_size=3, padding=1),  # 提取局部特征
-            nn.ReLU(),
-            nn.Conv2d(16, 16, kernel_size=3, padding=1),  # 进一步提取特征
-            nn.ReLU(),
-            nn.Conv2d(16, 4, kernel_size=1),  # 输出4个权重 logits
-        )
-        if ablation in ('equal_prior', 'equal'):
-            self.weight_predictor = None
-        self.saved_features = {}
-        self.ablation = ablation  # 记录消融模式
-
-    def forward(self, x):
-        # Make sure scale does not explode: clamp to max abs value of 2.5
-        # self.scale.data = torch.clamp(self.scale.data, min=-2.5, max=2.5)
-
-        with torch.no_grad():
-            max_RGB = torch.argmax(x, dim=1)
-            min_RGB = torch.argmin(x, dim=1)
-
-            x_ = torch.flip(x, dims=(1,))
-
-            max_RGB_ = 2 - torch.argmax(x_, dim=1)
-            min_RGB_ = 2 - torch.argmin(x_, dim=1)
-
-            def channel_one_hot(indices):
-                return F.one_hot(indices, num_classes=3).permute(0, 3, 1, 2).to(x.dtype)
-
-            RGB_order = 0.5 * (channel_one_hot(max_RGB) + channel_one_hot(max_RGB_))
-            RGB_order -= 0.5 * (channel_one_hot(min_RGB) + channel_one_hot(min_RGB_))
-
-        scale = torch.mean(self.conv(x), dim=(1, 2, 3))
-        scale = torch.clamp(scale, min=-2.5, max=2.5)
-
-        # Measure E, El, Ell by Gaussian color model
-        in_shape = x.shape  # bchw
-        x = x.view((in_shape[:2] + (-1,)))  # flatten image
-        x = torch.matmul(self.gcm.to(x.device, dtype=x.dtype), x)  # estimate E,El,Ell
-        x = x.view((in_shape[0],) + (3,) + in_shape[2:])  # reshape to original image size
-
-        E_out, El_out, Ell_out = convolve_gaussian_filters(x.float(), scale.float())
-
-        # print("W1")
-        E, Ex, Ey = torch.split(E_out, 1, dim=1)
-        El = torch.split(El_out, 1, dim=1)[0]
-        Ell = torch.split(Ell_out, 1, dim=1)[0]
-
-        H = hat_H(E, Ex, Ey, El, None, None, Ell, None, None)
-        S = torch.log(hat_S(E, Ex, Ey, El, None, None, Ell, None, None) + eps)
-        Ww = torch.atan(hat_Ww(E, Ex, Ey, El, None, None, Ell, None, None))
-
-        # 计算动态权重。单先验消融时使用固定权重 1，与论文的消融设定一致。
-        weight_logits = (self.weight_predictor(x)
-                         if self.weight_predictor is not None else None)
-        single_prior_indices = {
+        self.ablation = ablation
+        self.single_prior_indices = {
             'only_H': 0,
             'only_S': 1,
             'only_RGB': 2,
@@ -191,11 +114,110 @@ class PriorConv2d(nn.Module):
             'only_Ww': 3,
             'only_W': 3,
         }
-        if self.ablation in single_prior_indices:
-            fixed_weights = torch.zeros_like(weight_logits)
-            fixed_weights[:, single_prior_indices[self.ablation], :, :] = 1.0
-            # 保留 weight_predictor 在计算图中，避免 DDP 将其判定为未使用参数。
-            weights = weight_logits * 0.0 + fixed_weights
+        self.single_prior_index = self.single_prior_indices.get(ablation)
+
+        # Constants
+        # RGB-order-only ablations do not use the GCM.  Other modes retain the
+        # learnable, physics-initialized color basis.
+        if self.single_prior_index != 2:
+            self.gcm = torch.nn.Parameter(torch.tensor(
+                [[0.06, 0.63, 0.27], [0.3, 0.04, -0.35],
+                 [0.34, -0.6, 0.17]]))
+        self.k = k
+
+        # A Table-6 single-prior run instantiates just one projection branch
+        # and a matching adapter.  This makes it a structural ablation rather
+        # than a full four-branch model with three zero-weighted outputs.
+        base_channels = n_fea_middle // 4
+        active_indices = range(4) if self.single_prior_index is None else [self.single_prior_index]
+        self.conv_H = (nn.Conv2d(1, base_channels, kernel_size=1, bias=True)
+                       if 0 in active_indices else None)
+        self.conv_S = (nn.Conv2d(1, base_channels, kernel_size=1, bias=True)
+                       if 1 in active_indices else None)
+        self.conv_RGB = (nn.Conv2d(3, base_channels, kernel_size=1, bias=True)
+                         if 2 in active_indices else None)
+        self.conv_Ww = (nn.Conv2d(1, base_channels, kernel_size=1, bias=True)
+                        if 3 in active_indices else None)
+        adapter_inputs = base_channels * (4 if self.single_prior_index is None else 1)
+        self.conv_adjust = nn.Conv2d(
+            adapter_inputs, n_fea_middle, kernel_size=1, bias=True)
+
+        self.conv = None
+        if self.single_prior_index != 2:
+            self.conv = torch.nn.Sequential(
+                torch.nn.Conv2d(3, 16, 3, padding=1),
+                nn.SiLU(),
+                torch.nn.Conv2d(16, 16, 3, padding=1),
+                nn.SiLU(),
+                torch.nn.Conv2d(16, 1, 3, padding=1)
+            )
+        
+        #权重预测分支.引入一个动态权重生成模块，根据输入图像的特征预测每个先验的权重，使权重随着图像内容变化
+        self.weight_predictor = None
+        if self.single_prior_index is None and ablation not in ('equal_prior', 'equal'):
+            self.weight_predictor = nn.Sequential(
+                nn.Conv2d(3, 16, kernel_size=3, padding=1),  # 提取局部特征
+                nn.ReLU(),
+                nn.Conv2d(16, 16, kernel_size=3, padding=1),  # 进一步提取特征
+                nn.ReLU(),
+                nn.Conv2d(16, 4, kernel_size=1),  # 输出4个权重 logits
+            )
+        self.saved_features = {}
+
+    def forward(self, x):
+        # Make sure scale does not explode: clamp to max abs value of 2.5
+        # self.scale.data = torch.clamp(self.scale.data, min=-2.5, max=2.5)
+
+        RGB_order = None
+        if self.single_prior_index in (None, 2):
+            with torch.no_grad():
+                max_RGB = torch.argmax(x, dim=1)
+                min_RGB = torch.argmin(x, dim=1)
+                x_ = torch.flip(x, dims=(1,))
+                max_RGB_ = 2 - torch.argmax(x_, dim=1)
+                min_RGB_ = 2 - torch.argmin(x_, dim=1)
+
+                def channel_one_hot(indices):
+                    return F.one_hot(indices, num_classes=3).permute(0, 3, 1, 2).to(x.dtype)
+
+                RGB_order = 0.5 * (channel_one_hot(max_RGB) + channel_one_hot(max_RGB_))
+                RGB_order -= 0.5 * (channel_one_hot(min_RGB) + channel_one_hot(min_RGB_))
+
+        H = S = Ww = scale = None
+        weight_input = x
+        if self.single_prior_index != 2:
+            scale = torch.mean(self.conv(x), dim=(1, 2, 3))
+            scale = torch.clamp(scale, min=-2.5, max=2.5)
+
+            # Measure E, El, Ell by the Gaussian color model only when a
+            # color-invariant prior is active.
+            in_shape = x.shape
+            gcm_input = x.view((in_shape[:2] + (-1,)))
+            gcm_input = torch.matmul(
+                self.gcm.to(x.device, dtype=x.dtype), gcm_input)
+            gcm_input = gcm_input.view(
+                (in_shape[0],) + (3,) + in_shape[2:])
+            # Preserve the original FULL/no_* behavior: the dynamic fusion
+            # predictor consumes the GCM-transformed channels, not raw RGB.
+            weight_input = gcm_input
+            E_out, El_out, Ell_out = convolve_gaussian_filters(
+                gcm_input.float(), scale.float())
+            E, Ex, Ey = torch.split(E_out, 1, dim=1)
+            El = torch.split(El_out, 1, dim=1)[0]
+            Ell = torch.split(Ell_out, 1, dim=1)[0]
+            if self.single_prior_index in (None, 0):
+                H = hat_H(E, Ex, Ey, El, None, None, Ell, None, None)
+            if self.single_prior_index in (None, 1):
+                S = torch.log(hat_S(E, Ex, Ey, El, None, None, Ell, None, None) + eps)
+            if self.single_prior_index in (None, 3):
+                Ww = torch.atan(hat_Ww(E, Ex, Ey, El, None, None, Ell, None, None))
+
+        # 计算动态权重。单先验消融时使用固定权重 1，与论文的消融设定一致。
+        weight_logits = (self.weight_predictor(weight_input)
+                          if self.weight_predictor is not None else None)
+        if self.single_prior_index is not None:
+            weights = x.new_zeros((x.shape[0], 4, x.shape[2], x.shape[3]))
+            weights[:, self.single_prior_index:self.single_prior_index + 1] = 1.0
         elif self.ablation in ('equal_prior', 'equal'):
             weights = x.new_full((x.shape[0], 4, x.shape[2], x.shape[3]), 0.25)
         else:
@@ -207,21 +229,38 @@ class PriorConv2d(nn.Module):
                 weight_logits = weight_logits.masked_fill(~mask, float('-inf'))
             weights = torch.softmax(weight_logits, dim=1)
 
-        # 独立变换
-        H_fea = self.conv_H(H) 
-        S_fea = self.conv_S(S)  
-        RGB_fea = self.conv_RGB(RGB_order)  
-        Ww_fea = self.conv_Ww(Ww)  
-        
-        
-        # 应用动态权重
-        H_fea_w = H_fea * weights[:, 0:1, :, :]
-        S_fea_w = S_fea * weights[:, 1:2, :, :]
-        RGB_fea_w = RGB_fea * weights[:, 2:3, :, :]
-        Ww_fea_w = Ww_fea * weights[:, 3:4, :, :]
-         # 拼接
-        features = torch.cat([H_fea_w, S_fea_w, RGB_fea_w, Ww_fea_w], dim=1)  # [b, 40, h, w]
-        features = self.conv_adjust(features)  # [b, 40, h, w]
+        H_fea = S_fea = RGB_fea = Ww_fea = None
+        H_fea_w = S_fea_w = RGB_fea_w = Ww_fea_w = None
+        if self.single_prior_index is not None:
+            if self.single_prior_index == 0:
+                H_fea = self.conv_H(H)
+                H_fea_w = H_fea
+                active_feature = H_fea
+            elif self.single_prior_index == 1:
+                S_fea = self.conv_S(S)
+                S_fea_w = S_fea
+                active_feature = S_fea
+            elif self.single_prior_index == 2:
+                RGB_fea = self.conv_RGB(RGB_order)
+                RGB_fea_w = RGB_fea
+                active_feature = RGB_fea
+            else:
+                Ww_fea = self.conv_Ww(Ww)
+                Ww_fea_w = Ww_fea
+                active_feature = Ww_fea
+            features = self.conv_adjust(active_feature)
+        else:
+            H_fea = self.conv_H(H)
+            S_fea = self.conv_S(S)
+            RGB_fea = self.conv_RGB(RGB_order)
+            Ww_fea = self.conv_Ww(Ww)
+            H_fea_w = H_fea * weights[:, 0:1, :, :]
+            S_fea_w = S_fea * weights[:, 1:2, :, :]
+            RGB_fea_w = RGB_fea * weights[:, 2:3, :, :]
+            Ww_fea_w = Ww_fea * weights[:, 3:4, :, :]
+            features = torch.cat(
+                [H_fea_w, S_fea_w, RGB_fea_w, Ww_fea_w], dim=1)
+            features = self.conv_adjust(features)
 
         # 保存原始特征和权重
         self.saved_features = {
@@ -236,8 +275,9 @@ class PriorConv2d(nn.Module):
             'RGB_fea_w': RGB_fea_w,
             'Ww_fea_w': Ww_fea_w,
             'weights': weights,
-            'scale': scale.detach(),
-            'sigma': torch.pow(2.0, scale.detach()),
+            'scale': scale.detach() if scale is not None else None,
+            'sigma': (torch.pow(2.0, scale.detach())
+                      if scale is not None else None),
             'features': features  # 来自最后的拼接
         }
         return features
@@ -580,17 +620,25 @@ class FrequencyChannelAttention(nn.Module):
 class IGAB(nn.Module):
     def __init__(self, dim, heads, dim_head=40, num_blocks=2, use_attn_norm=True,
                  use_se=False, use_fcan=True, fcan_freq_sel_method='top4',
-                 use_guidance=True):
+                 use_guidance=True, use_qp_msa=True):
         super().__init__()
         self.blocks = nn.ModuleList([])
         self.use_attn_norm = use_attn_norm
         self.use_fcan = use_fcan
+        # Table-4 baseline removes the complete QP-MSA branch.  This is
+        # deliberately different from ``no_prior``, which retains ordinary
+        # attention but bypasses its prior-guided V modulation.
+        self.use_qp_msa = use_qp_msa
+        self.saved_attn_features = {}
         for _ in range(num_blocks):
-            attn = QP_MSA(dim=dim, heads=heads, dim_head=dim_head,
-                          use_guidance=use_guidance)
-            if use_attn_norm:
-                attn = PreNorm(dim, attn)
-            block = [attn, PreNorm(dim, FeedForward(dim=dim, use_se=use_se))]
+            block = []
+            if use_qp_msa:
+                attn = QP_MSA(dim=dim, heads=heads, dim_head=dim_head,
+                              use_guidance=use_guidance)
+                if use_attn_norm:
+                    attn = PreNorm(dim, attn)
+                block.append(attn)
+            block.append(PreNorm(dim, FeedForward(dim=dim, use_se=use_se)))
             if use_fcan:
                 block.append(FrequencyChannelAttention(
                     dim, freq_sel_method=fcan_freq_sel_method))
@@ -604,21 +652,27 @@ class IGAB(nn.Module):
         """
         x = x.permute(0, 2, 3, 1)  # [b, c, h, w] -> [b, h, w, c]
         for block in self.blocks:
-            attn, ff = block[0], block[1]
-            x = attn(x, illu_fea.permute(0, 2, 3, 1)) + x  # residual connection
+            if self.use_qp_msa:
+                attn, ff = block[0], block[1]
+                x = attn(x, illu_fea.permute(0, 2, 3, 1)) + x
+                attn_module = attn.fn if isinstance(attn, PreNorm) else attn
+                self.saved_attn_features = attn_module.saved_attn
+                fcan_index = 2
+            else:
+                ff = block[0]
+                fcan_index = 1
             ff_out = ff(x)
             if self.use_fcan:
-                ff_out = block[2](ff_out)
+                ff_out = block[fcan_index](ff_out)
             x = ff_out + x  # FCAN is inside the feed-forward residual branch.
-            attn_module = attn.fn if isinstance(attn, PreNorm) else attn
-            self.saved_attn_features = attn_module.saved_attn
         out = x.permute(0, 3, 1, 2)  # [b, h, w, c] -> [b, c, h, w]
         return out
 
 class Denoiser(nn.Module):
     def __init__(self, in_dim=3, out_dim=3, dim=40, level=2, num_blocks=[2, 4, 4],
                  use_attn_norm=True, use_se=False, use_fcan=True,
-                 fcan_freq_sel_method='top4', use_guidance=True):
+                 fcan_freq_sel_method='top4', use_guidance=True,
+                 use_qp_msa=True):
         super(Denoiser, self).__init__()
         if use_se and use_fcan:
             raise ValueError(
@@ -637,7 +691,7 @@ class Denoiser(nn.Module):
                 IGAB(dim=dim_level, num_blocks=num_blocks[i], dim_head=dim, 
                      heads=dim_level // dim, use_attn_norm=use_attn_norm, use_se=use_se,
                      use_fcan=use_fcan, fcan_freq_sel_method=fcan_freq_sel_method,
-                     use_guidance=use_guidance),
+                     use_guidance=use_guidance, use_qp_msa=use_qp_msa),
                 nn.Conv2d(dim_level, dim_level * 2, 4, 2, 1, bias=False),
                 nn.Conv2d(dim_level, dim_level * 2, 4, 2, 1, bias=False)
             ]))
@@ -648,7 +702,8 @@ class Denoiser(nn.Module):
                               num_blocks=num_blocks[-1], use_attn_norm=use_attn_norm,
                               use_se=use_se, use_fcan=use_fcan,
                               fcan_freq_sel_method=fcan_freq_sel_method,
-                              use_guidance=use_guidance)
+                              use_guidance=use_guidance,
+                              use_qp_msa=use_qp_msa)
 
         # 解码器
         self.decoder_layers = nn.ModuleList([])
@@ -661,7 +716,7 @@ class Denoiser(nn.Module):
                      dim_head=dim, heads=(dim_level // 2) // dim,
                      use_attn_norm=use_attn_norm, use_se=use_se, use_fcan=use_fcan,
                      fcan_freq_sel_method=fcan_freq_sel_method,
-                     use_guidance=use_guidance),
+                     use_guidance=use_guidance, use_qp_msa=use_qp_msa),
             ]))
             dim_level //= 2
 
@@ -756,7 +811,7 @@ class NoPriorGenerator(nn.Module):
 class QuadPriorFormer_Single_Stage(nn.Module):
     def __init__(self, in_channels=3, out_channels=3, n_feat=40, level=2, ablation=None,
                  num_blocks=[1, 1, 1], use_attn_norm=True, use_se=False, use_fcan=True,
-                 fcan_freq_sel_method='top4'):
+                 fcan_freq_sel_method='top4', use_qp_msa=True):
         super(QuadPriorFormer_Single_Stage, self).__init__()
         if ablation == 'retinex':
             self.PriorConv2d = RetinexIlluminationEstimator(n_feat)
@@ -769,7 +824,8 @@ class QuadPriorFormer_Single_Stage(nn.Module):
                                 use_attn_norm=use_attn_norm, use_se=use_se,
                                 use_fcan=use_fcan,
                                 fcan_freq_sel_method=fcan_freq_sel_method,
-                                use_guidance=ablation != 'no_prior')
+                                use_guidance=ablation != 'no_prior',
+                                use_qp_msa=use_qp_msa)
         self.test_mode = False  # 添加模式标志，分开测试和训练
 
     def forward(self, img):
@@ -803,17 +859,19 @@ class QuadPriorFormer_Single_Stage(nn.Module):
 class QuadPriorFormer(nn.Module):
     def __init__(self, in_channels=3, out_channels=3, n_feat=40, stage=3,
                  num_blocks=[1, 1, 1], ablation=None, use_attn_norm=True,
-                 use_se=False, use_fcan=True, fcan_freq_sel_method='top4'):
+                 use_se=False, use_fcan=True, fcan_freq_sel_method='top4',
+                 use_qp_msa=True):
         super(QuadPriorFormer, self).__init__()
         self.stage = stage
         modules_body = [QuadPriorFormer_Single_Stage(in_channels=in_channels, 
                                                   out_channels=out_channels, 
                                                   n_feat=n_feat, level=2, 
                                                   num_blocks=num_blocks, ablation=ablation,
-                                                  use_attn_norm=use_attn_norm, use_se=use_se,
-                                                  use_fcan=use_fcan,
-                                                  fcan_freq_sel_method=fcan_freq_sel_method,
-                                                  )
+                                                   use_attn_norm=use_attn_norm, use_se=use_se,
+                                                   use_fcan=use_fcan,
+                                                   fcan_freq_sel_method=fcan_freq_sel_method,
+                                                   use_qp_msa=use_qp_msa,
+                                                   )
                         for _ in range(stage)]
         self.body = nn.Sequential(*modules_body)
         
