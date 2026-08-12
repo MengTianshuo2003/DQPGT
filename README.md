@@ -219,7 +219,8 @@ python3 Enhancement/test_from_nomonitor.py --input_dir /path/to/VV --opt Options
 ```
 
 ### About `--GT_mean`
-We provide the same test setting as LLFlow, KinD, and recent diffusion models. Please note that we do not suggest this test setting because it uses the mean of ground truth to enhance the output of the model. But if you want to follow this test setting, just add a `--GT_mean` action at the end of the above test command as
+`GT_mean` is disabled by default in our model. But if you want to enable it, just add a `--GT_mean` action at the end of the above test command as
+
 ```
 python3 Enhancement/test_from_dataset.py --opt Options/QuadPriorFormer_LOL_v1.yml --weights pretrained_weights/LOL_v1.pth --dataset LOL_v1 --GT_mean
 ```
