@@ -218,7 +218,7 @@ python3 Enhancement/test_from_nomonitor.py --input_dir /path/to/NPE --opt Option
 python3 Enhancement/test_from_nomonitor.py --input_dir /path/to/VV --opt Options/QuadPriorFormer_NoMonitor.yml --weights pretrained_weights/LOL_v2_synthetic.pth --dataset VV
 ```
 
-### About `--GT_mean`
+#### About `--GT_mean`
 `GT_mean` is disabled by default in our model. But if you want to enable it, just add a `--GT_mean` action at the end of the above test command as
 
 ```
