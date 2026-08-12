@@ -14,6 +14,7 @@ variants:
       network_g:
         ablation: ~
         use_attn_norm: true
+        use_qp_msa: true
         use_se: false
         use_fcan: true
         fcan_freq_sel_method: top4
@@ -109,6 +110,69 @@ variants:
     overrides:
       network_g:
         fcan_freq_sel_method: top16
+
+  T4_BASELINE:
+    extends: FULL
+    description: Table 4 baseline without the prior generator, QP-MSA, or FCAN.
+    overrides:
+      network_g:
+        ablation: no_prior
+        use_qp_msa: false
+        use_fcan: false
+
+  T4_DQPG_MSA:
+    extends: FULL
+    description: Table 4 baseline plus DQPG-MSA, without FCAN.
+    overrides:
+      network_g:
+        use_qp_msa: true
+        use_fcan: false
+
+  T4_FCAN:
+    extends: FULL
+    description: Table 4 baseline plus FCAN, without the prior generator or QP-MSA.
+    overrides:
+      network_g:
+        ablation: no_prior
+        use_qp_msa: false
+        use_fcan: true
+
+  T4_FULL:
+    extends: FULL
+    description: Table 4 full DQPG-MSA plus FCAN model; alias of FULL.
+
+
+  T6_P_H:
+    extends: FULL
+    description: Table 6 DQPG-MSA using only the H prior.
+    overrides:
+      network_g:
+        ablation: only_H
+
+  T6_P_S:
+    extends: FULL
+    description: Table 6 DQPG-MSA using only the S prior.
+    overrides:
+      network_g:
+        ablation: only_S
+
+  T6_P_W:
+    extends: FULL
+    description: Table 6 DQPG-MSA using only the W prior.
+    overrides:
+      network_g:
+        ablation: only_W
+
+  T6_P_O:
+    extends: FULL
+    description: Table 6 DQPG-MSA using only the O (RGB-order) prior.
+    overrides:
+      network_g:
+        ablation: only_O
+
+  T6_DQPG_MSA:
+    extends: FULL
+    description: Table 6 full dynamically fused quadruple-prior DQPG-MSA; alias of FULL.
 
   C_FULL:
     extends: A3
