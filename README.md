@@ -280,7 +280,7 @@ python basicsr/test.py \
 ```
 
 
-### 6.Acknowledgments
+### 7.Acknowledgments
 
 We thank the following article and the authors for their open-source codes.
 
