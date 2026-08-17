@@ -274,7 +274,7 @@ python basicsr/train.py \
 
 ```
 python basicsr/test.py \
-  --opt Options/QuadPriorFormer_LOL_v2_synthetic_test.yml \
+  --opt Options/QuadPriorFormer_ablation_test.yml \
   --variant A0 \
   --weights /path/to/A0/best_psnr_xx.xx_iter.pth
 ```
