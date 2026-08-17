@@ -17,8 +17,8 @@ datasets:
     # interval_list: [1]
     random_reverse: false
     border_mode: false
-    dataroot_gt: /root/SMID/SMID_Long_np
-    dataroot_lq: /root/SMID/SMID_LQ_np
+    dataroot_gt: data/SMID/SMID_Long_np
+    dataroot_lq: data/SMID/SMID_LQ_np
     train_size: [960, 512]
     cache_keys: ~
     cache_data: true
@@ -60,8 +60,8 @@ datasets:
   val:
     name: ValSet
     type: Dataset_SMIDImage
-    dataroot_gt: /root/SMID/SMID_Long_np
-    dataroot_lq: /root/SMID/SMID_LQ_np
+    dataroot_gt: data/SMID/SMID_Long_np
+    dataroot_lq: data/SMID/SMID_LQ_np
     cache_data: true
     N_frames: 5
     padding: new_info
