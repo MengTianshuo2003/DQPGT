@@ -17,8 +17,8 @@ datasets:
   train:
     name: TrainSet
     type: Dataset_PairedImage
-    dataroot_gt: /root/LOLv2/Real_captured/Train/Normal
-    dataroot_lq: /root/LOLv2/Real_captured/Train/Low
+    dataroot_gt: data/LOLv2/Real_captured/Train/Normal
+    dataroot_lq: data/LOLv2/Real_captured/Train/Low
     geometric_augs: true
 
     filename_tmpl: '{}'
@@ -50,8 +50,8 @@ datasets:
   val:
     name: ValSet
     type: Dataset_PairedImage
-    dataroot_gt: /root/LOLv2/Real_captured/Test/Normal
-    dataroot_lq: /root/LOLv2/Real_captured/Test/Low
+    dataroot_gt: data/LOLv2/Real_captured/Test/Normal
+    dataroot_lq: data/LOLv2/Real_captured/Test/Low
     io_backend:
       type: disk
 
