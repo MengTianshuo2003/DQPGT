@@ -17,8 +17,8 @@ datasets:
   train:
     name: TrainSet
     type: Dataset_PairedImage
-    dataroot_gt: /root/LOLv2/Synthetic/Train/Normal
-    dataroot_lq: /root/LOLv2/Synthetic/Train/Low
+    dataroot_gt: data/LOLv2/Synthetic/Train/Normal
+    dataroot_lq: data/LOLv2/Synthetic/Train/Low
     geometric_augs: true
 
     filename_tmpl: '{}'
@@ -51,8 +51,8 @@ datasets:
     # Follow the requested LOLv2-syn protocol: validate on the official Test set.
     name: LOLv2SyntheticTest
     type: Dataset_PairedImage
-    dataroot_gt: /root/LOLv2/Synthetic/Test/Normal
-    dataroot_lq: /root/LOLv2/Synthetic/Test/Low
+    dataroot_gt: data/LOLv2/Synthetic/Test/Normal
+    dataroot_lq: data/LOLv2/Synthetic/Test/Low
     io_backend:
       type: disk
 
