@@ -15,8 +15,8 @@ datasets:
   test:
     name: LOLv2SyntheticTest
     type: Dataset_PairedImage
-    dataroot_gt: /root/LOLv2/Synthetic/Test/Normal
-    dataroot_lq: /root/LOLv2/Synthetic/Test/Low
+    dataroot_gt: data/LOLv2/Synthetic/Test/Normal
+    dataroot_lq: data/LOLv2/Synthetic/Test/Low
     filename_tmpl: '{}'
     io_backend:
       type: disk
