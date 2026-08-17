@@ -172,13 +172,10 @@ The `Options/QuadPriorFormer_*.yml` files expose the following architecture swit
 - `ablation: ~` keeps all four priors H/S/O/W enabled.
 - `ablation: only_H`, `only_S`, `only_O`, or `only_W` keeps only that prior and fixes its weight to 1. The aliases `only_RGB` and `only_Ww` are also accepted.
 - `ablation: no_H`, `no_S`, `no_RGB`, or `no_Ww` retains the existing leave-one-prior-out ablations.
-- `use_attn_norm: true` enables the LayerNorm before DQPG-MSA.
 - `use_fcan: true` enables the FcaNet-style multi-spectral channel attention block inside the feed-forward residual branch.
 - `fcan_freq_sel_method: top4` uses the Top-4 frequency indices. Eight groups are used because all DQPGT channel widths (40/80/160) must be divisible by the number of frequency groups.
 
 The FCAN implementation is adapted from the official [cfzd/FcaNet](https://github.com/cfzd/FcaNet) implementation.
-
-The revised FFN/FCAN topology is not strictly compatible with checkpoints trained by the previous SE-based implementation. Those checkpoints require the matching legacy architecture; setting `strict_load_g: false` only permits partial parameter loading and is not equivalent to reproducing the old model.
 
 ### 4. Testing
 
