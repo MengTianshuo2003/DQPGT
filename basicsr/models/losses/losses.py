@@ -182,7 +182,7 @@ class MSELoss(nn.Module):
         return self.loss_weight * mse_loss(
             pred, target, weight, reduction=self.reduction)
 
-# 新增：定义一个组合 L1 + SSIM 的损失类（可选）
+
 class L1SSIMLoss(nn.Module):
     """组合 L1 和 SSIM 的损失函数"""
     def __init__(self, l1_weight=1.0, ssim_weight=1.0, alpha=0.3, reduction='mean'):

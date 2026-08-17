@@ -70,7 +70,7 @@ def convolve_gaussian_filters(batch, scale):
 
 
 def hat_H(E, Ex, Ey, El, Elx, Ely, Ell, Ellx, Elly):
-    H_single = torch.atan(El / (Ell + eps))  # 单通道 H
+    H_single = torch.atan(El / (Ell + eps)) 
     return H_single
 
 
@@ -615,8 +615,8 @@ class FrequencyChannelAttention(nn.Module):
         if self._diagnostics_enabled:
             self._diagnostic_gate = weight.detach()
         return (feat * weight.expand_as(feat)).permute(0, 2, 3, 1).contiguous()
-#add 第一个layer normalization
-#add FCAN开启
+
+
 class IGAB(nn.Module):
     def __init__(self, dim, heads, dim_head=40, num_blocks=2, use_attn_norm=True,
                  use_se=False, use_fcan=True, fcan_freq_sel_method='top4',
